@@ -7,6 +7,7 @@
 #include <math.h>
 #include <string.h>
 #include <stdlib.h>
+#include <omp.h>
 
 #ifdef USE_METAL
 #include "voxtral_metal.h"
@@ -127,6 +128,7 @@ void vox_linear_nobias(float *y, const float *x, const float *W,
 /* Convert bf16 buffer to f32 buffer */
 static void bf16_to_f32_buf(float *dst, const uint16_t *src, size_t n) {
     uint32_t *d = (uint32_t *)(void *)dst;
+#pragma omp parallel for num_threads(4)
     for (size_t i = 0; i < n; i++)
         d[i] = ((uint32_t)src[i]) << 16;
 }
