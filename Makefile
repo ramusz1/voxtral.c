@@ -2,7 +2,7 @@
 # Makefile
 
 CC = gcc
-CFLAGS_BASE = -Wall -Wextra -O3 -march=native -ffast-math
+CFLAGS_BASE = -Wall -Wextra -O3 -march=native -ffast-math -fopenmp
 LDFLAGS = -lm
 
 # Platform detection
@@ -14,11 +14,12 @@ SRCS = voxtral.c voxtral_kernels.c voxtral_audio.c voxtral_encoder.c voxtral_dec
 OBJS = $(SRCS:.c=.o)
 MAIN = main.c
 TARGET = voxtral
+ONEMKL_ROOT = /opt/intel/oneapi/mkl/latest
 
 # Debug build flags
 DEBUG_CFLAGS = -Wall -Wextra -g -O0 -DDEBUG -fsanitize=address
 
-.PHONY: all clean debug info help blas mps inspect test
+.PHONY: all clean debug info help blas mps onemkl inspect test
 
 # Default: show available targets
 all: help
@@ -57,6 +58,21 @@ endif
 blas: clean $(TARGET)
 	@echo ""
 	@echo "Built with BLAS backend"
+
+# ============================================================================
+# Backend: onemkl (Accelerate for intel cpus + integrated graphics)
+# ============================================================================
+ifeq ($(UNAME_M),arm64)
+onemkl: @echo "onemkl not compiled for arm64"
+else
+onemkl: CFLAGS = $(CFLAGS_BASE) -DUSE_ONEMKL -I$(ONEMKL_ROOT)/include -DUSE_BLAS
+# onemkl: LDFLAGS += -L$(ONEMKL_ROOT)/lib -lmkl_intel_ilp64 -lmkl_core -lmkl_sequential -ldl -lpthread
+ onemkl: LDFLAGS += -m64 -Wl,--no-as-needed,-rpath,${ONEMKL_ROOT}/lib -L${ONEMKL_ROOT}/lib -lmkl_intel_lp64 -lmkl_core -lmkl_sequential -lpthread -lm -ldl
+onemkl: clean $(TARGET)
+	@echo ""
+	@echo "Built with ONEMKL backend"
+endif
+
 
 # =============================================================================
 # Backend: mps (Apple Silicon Metal GPU)
