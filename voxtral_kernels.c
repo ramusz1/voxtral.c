@@ -128,7 +128,7 @@ void vox_linear_nobias(float *y, const float *x, const float *W,
 /* Convert bf16 buffer to f32 buffer */
 static void bf16_to_f32_buf(float *dst, const uint16_t *src, size_t n) {
     uint32_t *d = (uint32_t *)(void *)dst;
-#pragma omp parallel for num_threads(4)
+// #pragma omp parallel for num_threads(4)
     for (size_t i = 0; i < n; i++)
         d[i] = ((uint32_t)src[i]) << 16;
 }
@@ -153,7 +153,7 @@ static float *f32_get_scratch(size_t n)
 /* Convert f32 buffer to f16 buffer */
 static void f32_to_bf16(uint16_t* dst, const float *src, size_t n) {
     uint32_t *s = (uint32_t *)(void *)src;
-#pragma omp parallel for num_threads(4)
+// #pragma omp parallel for num_threads(4)
     for (size_t i = 0; i < n; i++)
         dst[i] = (uint16_t)(s[i] >> 16);
 }
