@@ -4,8 +4,8 @@ I forked the original voxtral realtime 4B pure C implementation in my attempt to
 
 TODO:
 * [x] oneMKL instead of OpenBLAS
-* [] rewrite optimizations from original repo that only work for Mac 
-* [] 8bit model quantization
+* [ ] rewrite optimizations from original repo that only work for Mac 
+* [ ] 8bit model quantization
 
 # Voxtral Realtime 4B Pure C Implementation
 
