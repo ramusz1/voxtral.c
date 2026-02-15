@@ -1,3 +1,12 @@
+# About
+
+I forked the original voxtral realtime 4B pure C implementation in my attempt to learn how can I optimize it on my old laptop with integrated intel gpu, and through that process learn how model inference works and how to utize hardware better.
+
+TODO:
+* [x] oneMKL instead of OpenBLAS
+* [] rewrite optimizations from original repo that only work for Mac 
+* [] 8bit model quantization
+
 # Voxtral Realtime 4B Pure C Implementation
 
 This is a C implementation of the inference pipeline for the [Mistral AI's Voxtral Realtime 4B model](https://huggingface.co/mistralai/Voxtral-Mini-4B-Realtime-2602). It has zero external dependencies beyond the C standard library. The MPS inference is decently fast, while the BLAS acceleration is usable but slow (it continuously convert the bf16 weights to fp32).
