@@ -134,17 +134,43 @@ static void bf16_to_f32_buf(float *dst, const uint16_t *src, size_t n) {
 }
 
 /* Reusable scratch buffer for bf16->f32 conversion (avoids malloc/free per call) */
-static float *bf16_scratch = NULL;
+static float *f32_scratch = NULL;
+static size_t f32_scratch_cap = 0;
+
+static float *f32_get_scratch(size_t n)
+{
+    if (n > f32_scratch_cap)
+    {
+        free(f32_scratch);
+        f32_scratch = (float *)malloc(n * sizeof(float));
+        f32_scratch_cap = f32_scratch ? n : 0;
+    }
+    return f32_scratch;
+}
+
+#ifdef USE_ONEMKL
+
+/* Convert f32 buffer to f16 buffer */
+static void f32_to_bf16(uint16_t* dst, const float *src, size_t n) {
+    uint32_t *s = (uint32_t *)(void *)src;
+#pragma omp parallel for num_threads(4)
+    for (size_t i = 0; i < n; i++)
+        dst[i] = (uint16_t)(s[i] >> 16);
+}
+
+/* Reusable scratch buffer for f32->bf16 conversion (avoids malloc/free per call) */
+static uint16_t *bf16_scratch = NULL;
 static size_t bf16_scratch_cap = 0;
 
-static float *bf16_get_scratch(size_t n) {
+static uint16_t *bf16_get_scratch(size_t n) {
     if (n > bf16_scratch_cap) {
         free(bf16_scratch);
-        bf16_scratch = (float *)malloc(n * sizeof(float));
+        bf16_scratch = (uint16_t *)malloc(n * sizeof(uint16_t));
         bf16_scratch_cap = bf16_scratch ? n : 0;
     }
     return bf16_scratch;
 }
+#endif
 
 /*
  * Fused BF16 matvec: y[out_dim] = W_bf16[out_dim, in_dim] @ x[in_dim] + bias
@@ -212,8 +238,19 @@ void vox_linear_nobias_bf16(float *y, const float *x, const uint16_t *W_bf16,
         bf16_matvec_fused(y, x, W_bf16, NULL, in_dim, out_dim);
         return;
     }
+#ifdef USE_ONEMKL
+    size_t x_size = seq_len * in_dim;
+    // uint16_t *x_bf16 = (uint16_t *)malloc(x_size * sizeof(uint16_t));
+    uint16_t *x_bf16 = bf16_get_scratch(x_size);
+    f32_to_bf16(x_bf16, x, x_size);
+    cblas_gemm_bf16bf16f32(CblasRowMajor, CblasNoTrans, CblasTrans,
+                           seq_len, out_dim, in_dim,
+                           1.0f, x_bf16, in_dim, W_bf16, in_dim,
+                           0.0f, y, out_dim);
+    return;
+#endif
     size_t n = (size_t)out_dim * in_dim;
-    float *W_f32 = bf16_get_scratch(n);
+    float *W_f32 = f32_get_scratch(n);
     if (!W_f32) return;
     bf16_to_f32_buf(W_f32, W_bf16, n);
     vox_linear_nobias(y, x, W_f32, seq_len, in_dim, out_dim);
@@ -238,8 +275,24 @@ void vox_linear_bf16(float *y, const float *x, const uint16_t *W_bf16,
         bf16_matvec_fused(y, x, W_bf16, b, in_dim, out_dim);
         return;
     }
+#ifdef USE_ONEMKL
+    size_t x_size = seq_len * in_dim;
+    uint16_t *x_bf16 = bf16_get_scratch(x_size);
+    f32_to_bf16(x_bf16, x, x_size);
+    cblas_gemm_bf16bf16f32(CblasRowMajor, CblasNoTrans, CblasTrans,
+                            seq_len, out_dim, in_dim,
+                            1.0f, x_bf16, in_dim, W_bf16, in_dim,
+                            0.0f, y, out_dim);
+    if (b != NULL) {
+        for (int s = 0; s < seq_len; s++) {
+            for (int o = 0; o < out_dim; o++)
+                y[s * out_dim + o] += b[o];
+        }
+    }
+    return;
+#endif
     size_t n = (size_t)out_dim * in_dim;
-    float *W_f32 = bf16_get_scratch(n);
+    float *W_f32 = f32_get_scratch(n);
     if (!W_f32) return;
     bf16_to_f32_buf(W_f32, W_bf16, n);
     vox_linear(y, x, W_f32, b, seq_len, in_dim, out_dim);
@@ -262,7 +315,7 @@ void vox_matmul_t_bf16(float *C, const float *A, const uint16_t *B_bf16,
         bf16_matvec_fused(C, A, B_bf16, NULL, K, N);
     } else {
         size_t n = (size_t)N * K;
-        float *B_f32 = bf16_get_scratch(n);
+        float *B_f32 = f32_get_scratch(n);
         if (!B_f32) return;
         bf16_to_f32_buf(B_f32, B_bf16, n);
         vox_matmul_t(C, A, B_f32, M, K, N);
